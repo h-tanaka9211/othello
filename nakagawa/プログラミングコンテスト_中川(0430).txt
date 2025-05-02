@@ -1,0 +1,347 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Othello Game</title>
+  <style>
+    body { text-align: center; font-family: Arial, sans-serif; }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 50px);
+      grid-auto-rows: 50px;
+      gap: 2px;
+      margin: 20px auto;
+      perspective: 800px;
+      width: 416px;
+    }
+    .cell { width: 50px; height: 50px; background: green; display: flex; align-items: center; justify-content: center; border-radius: 5px; cursor: pointer; position: relative; }
+    .piece { width: 40px; height: 40px; border-radius: 50%; position: absolute; backface-visibility: hidden; transform-style: preserve-3d; }
+    .black { background: black; }
+    .white { background: white; }
+    .flip { animation: flipAnimation 0.4s ease-in-out; }
+    @keyframes flipAnimation {
+      0% { transform: rotateY(0deg); }
+      49% { transform: rotateY(90deg); }
+      50% { transform: rotateY(90deg); }
+      100% { transform: rotateY(180deg); }
+    }
+    .hint { width: 20px; height: 20px; border-radius: 50%; position: absolute; z-index: 1; }
+    #prompt { font-size: 24px; font-weight: bold; margin-top: 12px; }
+    #cpuLevel { font-size: 16px; padding: 4px; margin: 0 4px; }
+    #setLevelButton, #restartButton { font-size: 16px; padding: 4px 8px; cursor: pointer; }
+    .nice { position: absolute; top: 5px; left: 5px; padding: 2px 4px; border-radius: 3px; font-weight: bold; z-index: 2; }
+    .nice-player { background: yellow; }
+    .nice-cpu { background: orange; }
+    .cell.highlight { outline: 2px solid yellow; }
+  </style>
+</head>
+<body>
+  <h1>Othello Game</h1>
+  <div id="board" class="board"></div>
+  <div id="prompt"></div>
+  <div id="levelInput" style="font-size:16px;">
+    <div style="margin-bottom:4px;"><span style="color:red;">あなたの駒の色と、CPUレベルを選択して開始してください</span></div>
+    <div style="margin-bottom:4px;">あなたの色：
+      <label><input type="radio" name="playerColor" value="B" checked> 黒</label>
+      <label><input type="radio" name="playerColor" value="W"> 白</label>
+    </div>
+    <select id="cpuLevel">
+      <option value="easy">Easy</option>
+      <option value="medium">Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+    <div style="margin:8px;">
+      <label><input type="checkbox" id="showHints" checked> ヒントを表示する</label>
+    </div>
+    <button id="setLevelButton">開始</button>
+  </div>
+  <script>
+    class Othello {
+      constructor() {
+        this.board = this.createBoard();
+        this.currentPlayer = 'B';
+        this.flipping = false;
+        this.cpuPlayer = 'W';
+        this.cpuLevel = 'easy';
+        this.showHints = true;
+        this.gameStarted = false;
+        this.cursor = { row: 0, col: 0 };
+        this.keyListenerAttached = false;
+        this.renderBoard();
+      }
+
+      createBoard() {
+        const b = Array.from({ length: 8 }, () => Array(8).fill(null));
+        b[3][3] = 'W'; b[3][4] = 'B'; b[4][3] = 'B'; b[4][4] = 'W';
+        return b;
+      }
+
+      updateScore() {
+        let countB = 0, countW = 0;
+        this.board.flat().forEach(c => { if (c === 'B') countB++; if (c === 'W') countW++; });
+        let html = '';
+        if (this.cpuPlayer === 'B') {
+          html = `<div>CPU: ${countB}</div><div>あなた: ${countW}</div>`;
+        } else {
+          html = `<div>CPU: ${countW}</div><div>あなた: ${countB}</div>`;
+        }
+        if (this.currentPlayer !== this.cpuPlayer) {
+          html += `<div style="font-size:16px; color:blue;">（あなたの番です）</div>`;
+        }
+        document.getElementById('prompt').innerHTML = html;
+      }
+
+      computeFlipped(x, y, p) {
+        const o = p === 'B' ? 'W' : 'B';
+        const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        let flipped = [];
+        dirs.forEach(([dx, dy]) => {
+          let i = x+dx, j = y+dy, path = [];
+          while (i>=0 && i<8 && j>=0 && j<8 && this.board[i][j] === o) {
+            path.push([i,j]); i+=dx; j+=dy;
+          }
+          if (path.length && i>=0 && i<8 && j>=0 && j<8 && this.board[i][j] === p) {
+            flipped = flipped.concat(path);
+          }
+        });
+        return flipped;
+      }
+
+      isValidMove(x, y, p) {
+        return this.board[x][y] === null && this.computeFlipped(x, y, p).length > 0;
+      }
+
+      hasValidMove(p) {
+        for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
+          if (this.isValidMove(i,j,p)) return true;
+        }
+        return false;
+      }
+
+      makeMove(x, y) {
+        if (!this.gameStarted || this.flipping || !this.isValidMove(x,y,this.currentPlayer)) return;
+        const p = this.currentPlayer;
+        const flips = this.computeFlipped(x, y, p);
+        // 追加: 念のため早期リターン
+        if (flips.length === 0) return;
+
+        this.board[x][y] = p;
+        this.flipping = true;
+        this.renderBoard();
+
+        let completed = 0;
+        const finishFlips = () => {
+          this.flipping = false;
+          const other = p === 'B' ? 'W' : 'B';
+          if (this.hasValidMove(other)) {
+            this.currentPlayer = other;
+          } else if (this.hasValidMove(p)) {
+            alert((other===this.cpuPlayer?'CPU':'あなた') + 'は置ける場所がありません。パスします。');
+            this.currentPlayer = p;
+          } else {
+            this.gameOver();
+            return;
+          }
+          this.renderBoard();
+          if (this.currentPlayer === this.cpuPlayer) this.cpuMove();
+        };
+
+        flips.forEach(([fx,fy], idx) => {
+          const selector = `.board .cell:nth-child(${fx*8+fy+1}) .piece`;
+          const cellPiece = document.querySelector(selector);
+          if (cellPiece) {
+            cellPiece.addEventListener('animationend', () => {
+              completed++;
+              if (completed === flips.length) {
+                finishFlips();
+              }
+            }, { once: true });
+            setTimeout(() => {
+              cellPiece.classList.add('flip');
+              setTimeout(() => {
+                cellPiece.classList.toggle('black');
+                cellPiece.classList.toggle('white');
+                this.board[fx][fy] = p;
+              }, 200);
+            }, idx * 200);
+          }
+        });
+
+        // 追加: アニメーション完了保証のための保険タイムアウト
+        setTimeout(() => {
+          if (this.flipping) finishFlips();
+        }, flips.length * 200 + 600);
+
+        // 追加: 古い nice 要素を削除
+        document.querySelectorAll('.nice').forEach(n => n.remove());
+        if (flips.length >= 5) {
+          const [lx, ly] = flips[flips.length - 1];
+          setTimeout(() => {
+            const cell = document.querySelector(`.board .cell:nth-child(${lx*8+ly+1})`);
+            if (cell) {
+              const msg = document.createElement('div');
+              msg.textContent = 'nice★';
+              msg.className = 'nice ' + (p === 'B' ? 'nice-player' : 'nice-cpu');
+              cell.appendChild(msg);
+            }
+          }, flips.length * 200 + 300);
+        }
+      }
+
+      highlightCursor({ row, col }) {
+        document.querySelectorAll('.cell').forEach(c => c.classList.remove('highlight'));
+        const target = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+        if (target) target.classList.add('highlight');
+      }
+
+      renderBoard() {
+        const be = document.getElementById('board');
+        be.innerHTML = '';
+        for (let i = 0; i < 8; i++) {
+          for (let j = 0; j < 8; j++) {
+            const c = document.createElement('div');
+            c.className = 'cell';
+            c.dataset.row = i;
+            c.dataset.col = j;
+            const stone = this.board[i][j];
+            if (stone) {
+              const pc = document.createElement('div');
+              pc.className = `piece ${stone === 'B' ? 'black' : 'white'}`;
+              c.appendChild(pc);
+            } else if (this.showHints && this.gameStarted && this.currentPlayer !== this.cpuPlayer && this.isValidMove(i, j, this.currentPlayer)) {
+              const h = document.createElement('div');
+              h.className = 'hint';
+              h.style.backgroundColor = this.currentPlayer === 'B' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)';
+              c.appendChild(h);
+            }
+            be.appendChild(c);
+          }
+        }
+
+        be.onclick = e => {
+          if (this.flipping || !this.gameStarted || this.currentPlayer === this.cpuPlayer) return;
+          const cell = e.target.closest('.cell');
+          if (cell) this.makeMove(+cell.dataset.row, +cell.dataset.col);
+        };
+
+        if (!this.keyListenerAttached) {
+          this.keyListenerAttached = true;
+          document.addEventListener('keydown', (e) => {
+            if (!this.gameStarted) return;
+            if (this.flipping || this.currentPlayer === this.cpuPlayer) return;
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter',' '].includes(e.key)) {
+              e.preventDefault();
+            }
+            if (e.key === 'ArrowUp') this.cursor.row = (this.cursor.row + 7) % 8;
+            if (e.key === 'ArrowDown') this.cursor.row = (this.cursor.row + 1) % 8;
+            if (e.key === 'ArrowLeft') this.cursor.col = (this.cursor.col + 7) % 8;
+            if (e.key === 'ArrowRight') this.cursor.col = (this.cursor.col + 1) % 8;
+            if (e.key === 'Enter' || e.key === ' ') this.makeMove(this.cursor.row, this.cursor.col);
+            this.highlightCursor(this.cursor);
+          });
+
+          be.addEventListener('touchstart', (e) => {
+            if (!this.gameStarted || this.flipping || this.currentPlayer === this.cpuPlayer) return;
+            e.preventDefault();
+            const cell = e.target.closest('.cell');
+            if (cell) this.makeMove(+cell.dataset.row, +cell.dataset.col);
+          });
+        }
+
+        if (this.gameStarted) this.updateScore();
+      }
+
+      cpuMove() {
+        if (this.flipping) return;
+        const moves = [];
+        for (let i = 0; i < 8; i++) {
+          for (let j = 0; j < 8; j++) {
+            if (this.isValidMove(i, j, this.cpuPlayer)) moves.push([i, j]);
+          }
+        }
+        if (!moves.length) return;
+        let choice;
+        if (this.cpuLevel === 'easy') {
+          let min = Infinity;
+          moves.forEach(m => {
+            const cnt = this.computeFlipped(m[0], m[1], this.cpuPlayer).length;
+            if (cnt < min) { min = cnt; choice = m; }
+          });
+        } else if (this.cpuLevel === 'medium') {
+          let max = -1;
+          moves.forEach(m => {
+            const cnt = this.computeFlipped(m[0], m[1], this.cpuPlayer).length;
+            if (cnt > max) { max = cnt; choice = m; }
+          });
+        } else {
+          const scoreMap = [
+            [100, -20, 10,  5,  5, 10, -20, 100],
+            [-20, -50, -2, -2, -2, -2, -50, -20],
+            [10,  -2,  0,  0,  0,  0,  -2,  10],
+            [5,   -2,  0,  0,  0,  0,  -2,   5],
+            [5,   -2,  0,  0,  0,  0,  -2,   5],
+            [10,  -2,  0,  0,  0,  0,  -2,  10],
+            [-20, -50, -2, -2, -2, -2, -50, -20],
+            [100, -20, 10,  5,  5, 10, -20, 100]
+          ];
+          let maxScore = -Infinity;
+          for (const [x, y] of moves) {
+            const flipped = this.computeFlipped(x, y, this.cpuPlayer).length;
+            const score = scoreMap[x][y] + flipped * 10;
+            if (score > maxScore) {
+              maxScore = score;
+              choice = [x, y];
+            }
+          }
+        }
+        setTimeout(() => this.makeMove(choice[0], choice[1]), 500);
+      }
+
+      gameOver() {
+        this.gameStarted = false;
+        let b = 0, w = 0;
+        this.board.flat().forEach(c => { if (c==='B') b++; if (c==='W') w++; });
+        const humanIsBlack = this.cpuPlayer === 'W';
+        const humanScore = humanIsBlack ? b : w;
+        const cpuScore   = humanIsBlack ? w : b;
+        let html = '';
+        if (humanScore > cpuScore) {
+          html = `<div><span style="color:red;">あなたの勝ち！</span><br>あなた: ${humanScore}　CPU: ${cpuScore}</div>`;
+        } else if (humanScore < cpuScore) {
+          html = `<div><span style="color:blue;">CPUの勝ち...</span><br>あなた: ${humanScore}　CPU: ${cpuScore}</div>`;
+        } else {
+          html = `<div>引き分け！<br>あなた: ${humanScore}　CPU: ${cpuScore}</div>`;
+        }
+        html += `<div style="margin-top:10px;"><button id="restartButton" onclick="game.restartGame()">もう一度プレイ</button></div>`;
+        document.getElementById('prompt').innerHTML = html;
+      }
+
+      restartGame() {
+        this.board = this.createBoard();
+        this.currentPlayer = 'B';
+        this.flipping = false;
+        this.gameStarted = false;
+        document.getElementById('levelInput').style.display = 'block';
+        this.renderBoard();
+      }
+    }
+
+    const game = new Othello();
+    document.getElementById('setLevelButton').addEventListener('click', () => {
+      game.cpuLevel = document.getElementById('cpuLevel').value;
+      const humanColor = document.querySelector('input[name="playerColor"]:checked').value;
+      game.cpuPlayer = humanColor === 'B' ? 'W' : 'B';
+      game.showHints = document.getElementById('showHints').checked;
+      game.currentPlayer = 'B';
+      game.gameStarted = true;
+      document.getElementById('levelInput').style.display = 'none';
+      game.renderBoard();
+      if (game.cpuPlayer === 'B') {
+        setTimeout(() => game.cpuMove(), 500);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>オセロゲーム</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="wrapper">
+        <div class="cpu-info-container">
+            <div class="cpu-info">
+                <span class="cpu-label">CPU</span>
+                <span class="cpu-count">(2枚)</span>
+                <div class="cpu-icon"></div>
+            </div>
+        </div>
+        <div class="game-container">
+            <div class="board"></div>
+            <div class="color-selection">
+                <h2>駒の色を選択してください</h2>
+                <div class="color-options">
+                    <button class="color-btn black" data-color="black">黒（先手）</button>
+                    <button class="color-btn white" data-color="white">白（後手）</button>
+                    <button class="color-btn random" data-color="random">ランダム</button>
+                </div>
+            </div>
+            <div class="difficulty-selection" style="display: none;">
+                <h2>対戦相手の難易度は？</h2>
+                <div class="difficulty-options">
+                    <button class="difficulty-btn level-1" data-level="1">LEVEL 1</button>
+                    <button class="difficulty-btn level-2" data-level="2">LEVEL 2</button>
+                    <button class="difficulty-btn level-3" data-level="3">LEVEL 3</button>
+                    <button class="toggle-secret-btn">▼</button>
+                    <button class="difficulty-btn level-oni" data-level="99" style="display: none;">LEVEL おに 👹</button>
+                </div>
+            </div>
+            <div class="game-result" style="display: none;">
+                <p class="result-text"></p>
+                <button class="restart-btn">もう一戦！</button>
+                <p class="view-final-board">最終盤面をみる</p>
+            </div>
+            <button class="reset-btn">ゲームをリセット</button>
+            <div class="test-patterns" style="display: none;">
+                <button class="test-btn" data-pattern="win">あと１手で勝てるパターン</button>
+                <button class="test-btn" data-pattern="lose">あと１手で負けるパターン</button>
+                <button class="test-btn" data-pattern="draw">引き分けのパターン</button>
+                <button class="test-btn" data-pattern="playerpass">強制パスが発生するパターン(player)</button>
+                <button class="test-btn" data-pattern="cpupass">強制パスが発生するパターン(CPU)</button>
+                <button class="test-btn" data-pattern="doubleplayerpass">2回連続で強制パスするパターン(player)</button>
+                <button class="test-btn" data-pattern="doublecpupass">2回連続で強制パスするパターン(CPU)</button>
+                <button class="test-btn" data-pattern="gameend">ゲームが終了するパターン</button>
+            </div>
+            <div class="temp-message" style="display: none;">
+                <p class="temp-message-text"></p>
+            </div>
+        </div> <!-- .game-container -->
+        <div class="player-info-container">
+            <div class="player-info" style="display: none;">
+                <div class="player-icon"></div>
+                <span class="player-label">あなた</span>
+                <span class="player-count">(2枚)</span>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
